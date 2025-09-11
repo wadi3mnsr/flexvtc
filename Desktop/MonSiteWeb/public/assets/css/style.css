@@ -244,3 +244,15 @@ footer p{ opacity:.85; margin:.25rem 0; }
 }
 .ac-item{ padding:.55rem .75rem; cursor:pointer; }
 .ac-item:hover, .ac-item[aria-selected="true"]{ background:#f1f5f9; }
+
+/* Avis */
+.rating-badge { font-size:1.2rem; }
+.reviews-list { margin-top:.5rem; }
+.review-item .review-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.stars { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; letter-spacing:.1rem; }
+.review-item p { margin:.25rem 0; }
+.muted { color:#64748b; }
+.pagination { display:flex; gap:.35rem; margin-top:.75rem; flex-wrap:wrap; }
+.pagination .page,
+.pagination .current { padding:.35rem .6rem; border:1px solid var(--border); border-radius:.5rem; text-decoration:none; }
+.pagination .current { background:#111827; color:#fff; border-color:#111827; }
