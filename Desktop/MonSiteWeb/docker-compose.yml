@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  mailhog:
+    image: mailhog/mailhog
+    container_name: flexvtc_mailhog
+    ports:
+      - "8025:8025"   # UI web de MailHog
+      - "1025:1025"   # SMTP
+
+  php-apache:
+    build: .
+    container_name: flexvtc_app
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/html
+      - ./includes:/var/www/html/includes
+      - ./config:/var/www/html/config
+      - ./models:/var/www/html/models
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8.0
+    container_name: flexvtc_db
+    environment:
+      MYSQL_ROOT_PASSWORD: flex_rootpass
+      MYSQL_DATABASE: flexvtc_db
+      MYSQL_USER: flex_user
+      MYSQL_PASSWORD: flex_userpass
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: flexvtc_phpmyadmin
+    environment:
+      PMA_HOST: db
+      PMA_USER: flex_user
+      PMA_PASSWORD: flex_userpass
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+
+  
+
+volumes:
+  db_data:
