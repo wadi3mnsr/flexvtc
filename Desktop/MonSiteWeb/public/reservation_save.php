@@ -1,8 +1,13 @@
 <?php
+// reservation_save.php
 require __DIR__ . '/config/app.php';
 require __DIR__ . '/config/database.php';
+require_once __DIR__ . '/lib/send_smtp.php';
+require_once __DIR__ . '/lib/order_pdf.php';
 
-// Récupération / nettoyage
+// ---------------------------
+// 1) Récupération & nettoyage
+// ---------------------------
 $from      = trim($_POST['from'] ?? '');
 $to        = trim($_POST['to'] ?? '');
 $date      = $_POST['date'] ?? '';
@@ -15,21 +20,24 @@ $phone     = trim($_POST['phone'] ?? '');
 $email     = trim($_POST['email'] ?? '');
 $notes     = trim($_POST['notes'] ?? '');
 
-$distance  = $_POST['distance'] ?? null;
-$duration  = $_POST['duration'] ?? null;
-$price     = $_POST['price_estimate'] ?? null;
+$distance  = $_POST['distance'] ?? null;          // km (nombre)
+$duration  = $_POST['duration'] ?? null;          // min (nombre)
+$price     = $_POST['price_estimate'] ?? null;    // € (nombre)
 
 $from_lat  = $_POST['from_lat'] ?? null;
 $from_lng  = $_POST['from_lng'] ?? null;
 $to_lat    = $_POST['to_lat'] ?? null;
 $to_lng    = $_POST['to_lng'] ?? null;
 
-// Validation serveur
+// -----------------------------------
+// 2) Validation minimale côté serveur
+// -----------------------------------
 $errors = [];
-if ($from === '' || $to === '') $errors[] = "Adresses départ et arrivée obligatoires.";
-if ($date === '' || $time === '') $errors[] = "Date et heure obligatoires.";
-if ($firstname === '' || $lastname === '' || $phone === '' || $email === '') $errors[] = "Coordonnées obligatoires.";
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email invalide.";
+if ($from === '' || $to === '')           $errors[] = "Adresses départ et arrivée obligatoires.";
+if ($date === '' || $time === '')         $errors[] = "Date et heure obligatoires.";
+if ($firstname === '' || $lastname === '')$errors[] = "Nom et prénom obligatoires.";
+if ($phone === '')                        $errors[] = "Téléphone obligatoire.";
+if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email invalide.";
 
 $ride_datetime = date('Y-m-d H:i:s', strtotime("$date $time"));
 
@@ -53,7 +61,9 @@ if ($errors) {
   exit;
 }
 
-// Insertion
+// ---------------------
+// 3) Insertion en base
+// ---------------------
 $stmt = $pdo->prepare("
   INSERT INTO reservations
     (firstname, lastname, phone, email,
@@ -88,47 +98,59 @@ $stmt->execute([
 
 $id = (int)$pdo->lastInsertId();
 
-// === Envoi d'e-mails via MailHog ===
-require_once __DIR__ . '/lib/send_smtp.php';
+// ----------------------------------------------------
+// 4) Génération du bon de commande PDF (pièce jointe)
+// ----------------------------------------------------
+$pdfPath = generate_bon_commande_pdf([
+  'id'           => $id,
+  'date'         => date('d/m/Y H:i', strtotime($ride_datetime)),
+  'client_name'  => $firstname.' '.$lastname,
+  'client_email' => $email,
+  'from'         => $from,
+  'to'           => $to,
+  'price'        => $price_eur,
+  'distance_km'  => $distance_km,
+  'duration_min' => $duration_min,
+  'option'       => $option ?: '—',
+]);
 
-// Client
-$clientSubject = "Votre demande de réservation #$id – FlexVTC";
-$clientBody = "<p>Bonjour ".htmlspecialchars($firstname).",</p>
-<p>Merci pour votre demande. Voici votre récapitulatif :</p>
+// ----------------------------------------
+// 5) Envoi e-mails avec PJ (via MailHog)
+// ----------------------------------------
+$subjectClient = "Votre bon de commande #$id – FlexVTC";
+$subjectAdmin  = "Bon de commande #$id (client : ".$firstname." ".$lastname.")";
+
+$bodyClient = "<p>Bonjour ".htmlspecialchars($firstname).",</p>
+<p>Veuillez trouver en pièce jointe votre bon de commande (PDF) pour la réservation #$id.</p>
+<p>Résumé :</p>
 <ul>
   <li><strong>Trajet :</strong> ".htmlspecialchars($from)." → ".htmlspecialchars($to)."</li>
   <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', strtotime($ride_datetime)))."</li>"
   . ($price_eur !== null ? "<li><strong>Prix estimé :</strong> ".number_format($price_eur,2,',',' ')." €</li>" : "") .
 "</ul>
-<p>Nous reviendrons vers vous pour confirmation.</p>
-<p>— FlexVTC</p>";
-@send_smtp_basic($email, $clientSubject, $clientBody);
+<p>Merci pour votre confiance.<br>— FlexVTC</p>";
 
-// Gérant
-$adminSubject = "Nouvelle réservation #$id";
-$adminBody = "<p>Nouvelle demande :</p>
+$bodyAdmin = "<p>Nouveau bon de commande en pièce jointe (PDF) pour la réservation #$id.</p>
 <ul>
-  <li><strong>Client :</strong> ".htmlspecialchars($firstname.' '.$lastname)." (".htmlspecialchars($phone).", ".htmlspecialchars($email).")</li>
+  <li><strong>Client :</strong> ".htmlspecialchars($firstname.' '.$lastname)." (".htmlspecialchars($email).")</li>
   <li><strong>Trajet :</strong> ".htmlspecialchars($from)." → ".htmlspecialchars($to)."</li>
-  <li><strong>Date :</strong> ".htmlspecialchars($ride_datetime)."</li>
-  <li><strong>Distance/Durée/Prix :</strong> "
-    . (($distance_km!==null)? number_format($distance_km,2,',',' ')." km" : "—")
-    . " / "
-    . (($duration_min!==null)? (int)$duration_min." min" : "—")
-    . " / "
-    . (($price_eur!==null)? number_format($price_eur,2,',',' ')." €" : "—")
-  . "</li>
+  <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', strtotime($ride_datetime)))."</li>
 </ul>";
-@send_smtp_basic('gerant@flexvtc.local', $adminSubject, $adminBody);
 
-// Page confirmation
+// Envoi (capturé par MailHog en dev)
+@send_smtp_with_attachment($email, $subjectClient, $bodyClient, $pdfPath, "bon-commande-{$id}.pdf");
+@send_smtp_with_attachment('wadiimansouri@gmail.com', $subjectAdmin, $bodyAdmin, $pdfPath, "bon-commande-{$id}.pdf");
+
+// --------------------------------------
+// 6) Page de confirmation utilisateur
+// --------------------------------------
 include __DIR__ . '/includes/header.php';
 ?>
 <section class="container">
   <div class="card" style="margin-top:1.5rem">
     <h1 class="mt-0">Réservation envoyée ✅</h1>
     <p>Numéro de demande : <strong>#<?= $id ?></strong></p>
-    <p>Merci <?= htmlspecialchars($firstname) ?>, un e-mail de confirmation vous a été envoyé.</p>
+    <p>Merci <?= htmlspecialchars($firstname) ?>, un e-mail avec votre <strong>bon de commande (PDF)</strong> vous a été envoyé.</p>
     <hr>
     <p class="small">
       <strong>Trajet :</strong> <?= htmlspecialchars($from) ?> → <?= htmlspecialchars($to) ?><br>

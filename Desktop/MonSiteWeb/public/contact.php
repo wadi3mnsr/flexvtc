@@ -49,13 +49,7 @@
     <article class="card">
       <h2 class="mt-0">Nos infos</h2>
       <p class="mb-1"><strong>FlexVTC</strong><br>Nantes & alentours</p>
-      <p class="mb-1">Email : contact@flexvtc.fr<br>Tél : 06 00 00 00 00</p>
+      <p class="mb-1">Email : wadiimansouri@gmail.com<br>Tél : 06 25 25 54 84</p>
       <p class="small">Service 24/7 sur réservation</p>
 
-      <h3>Zone de service</h3>
-      <div id="contact-map" style="height:280px;border:1px solid var(--border);border-radius:.8rem;"></div>
-    </article>
-  </div>
-</section>
 
-<?php include __DIR__ . '/includes/footer.php'; ?>
