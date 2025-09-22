@@ -1,9 +1,9 @@
 <?php
-// reservation_save.php
+// public/reservation_save.php
 require __DIR__ . '/config/app.php';
 require __DIR__ . '/config/database.php';
-require_once __DIR__ . '/lib/send_smtp.php';
-require_once __DIR__ . '/lib/order_pdf.php';
+require_once __DIR__ . '/lib/send_smtp.php';  // contient send_smtp_gmail_with_attachment(...)
+require_once __DIR__ . '/lib/order_pdf.php';  // contient generate_bon_commande_pdf(...)
 
 // ---------------------------
 // 1) Récupération & nettoyage
@@ -115,7 +115,7 @@ $pdfPath = generate_bon_commande_pdf([
 ]);
 
 // ----------------------------------------
-// 5) Envoi e-mails avec PJ (via MailHog)
+// 5) Envoi e-mails réels via Gmail (PJ)
 // ----------------------------------------
 $subjectClient = "Votre bon de commande #$id – FlexVTC";
 $subjectAdmin  = "Bon de commande #$id (client : ".$firstname." ".$lastname.")";
@@ -137,9 +137,9 @@ $bodyAdmin = "<p>Nouveau bon de commande en pièce jointe (PDF) pour la réserva
   <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', strtotime($ride_datetime)))."</li>
 </ul>";
 
-// Envoi (capturé par MailHog en dev)
-@send_smtp_with_attachment($email, $subjectClient, $bodyClient, $pdfPath, "bon-commande-{$id}.pdf");
-@send_smtp_with_attachment('wadiimansouri@gmail.com', $subjectAdmin, $bodyAdmin, $pdfPath, "bon-commande-{$id}.pdf");
+// (envoi via Gmail SMTP - nécessite config/email.php et un mot de passe d'application)
+send_smtp_gmail_with_attachment($email, $subjectClient, $bodyClient, $pdfPath, "bon-commande-{$id}.pdf");
+send_smtp_gmail_with_attachment('wadiimansouri@gmail.com', $subjectAdmin, $bodyAdmin, $pdfPath, "bon-commande-{$id}.pdf");
 
 // --------------------------------------
 // 6) Page de confirmation utilisateur

@@ -256,3 +256,7 @@ footer p{ opacity:.85; margin:.25rem 0; }
 .pagination .page,
 .pagination .current { padding:.35rem .6rem; border:1px solid var(--border); border-radius:.5rem; text-decoration:none; }
 .pagination .current { background:#111827; color:#fff; border-color:#111827; }
+
+/* Checkbox alignement */
+.checkbox { display:flex; align-items:flex-start; gap:.5rem; }
+.checkbox input { margin-top:.35rem; }
