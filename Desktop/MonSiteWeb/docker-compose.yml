@@ -5,8 +5,8 @@ services:
     image: mailhog/mailhog
     container_name: flexvtc_mailhog
     ports:
-      - "8025:8025"   # UI web de MailHog
-      - "1025:1025"   # SMTP
+      - "8025:8025"      # UI MailHog
+      - "1025:1025"      # SMTP (dev)
 
   php-apache:
     build: .
@@ -18,8 +18,10 @@ services:
       - ./includes:/var/www/html/includes
       - ./config:/var/www/html/config
       - ./models:/var/www/html/models
+      - ./.env:/var/www/html/.env           # ← on monte le .env dans /var/www/html
     depends_on:
       - db
+      - mongo
 
   db:
     image: mysql:8.0
@@ -46,7 +48,34 @@ services:
     depends_on:
       - db
 
-  
+  mongo:
+    image: mongo:7
+    container_name: flexvtc_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpass
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:1
+    container_name: flexvtc_mongo_express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: rootpass
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    ports:
+      - "8082:8081"
+    depends_on:
+      - mongo
 
 volumes:
   db_data:
+  mongo_data:
