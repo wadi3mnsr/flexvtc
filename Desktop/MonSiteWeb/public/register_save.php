@@ -1,76 +1,47 @@
 <?php
-require __DIR__ . '/config/app.php';
 require __DIR__ . '/config/database.php';
 
-// 1) Honeypot anti-bot
-if (!empty($_POST['website'] ?? '')) { http_response_code(204); exit; }
-
-// 2) Récupération
+// ---------------------------
+// 1) Récupération & nettoyage
+// ---------------------------
 $firstname = trim($_POST['firstname'] ?? '');
 $lastname  = trim($_POST['lastname'] ?? '');
 $email     = trim($_POST['email'] ?? '');
 $phone     = trim($_POST['phone'] ?? '');
 $password  = $_POST['password'] ?? '';
-$confirm   = $_POST['password_confirm'] ?? '';
-$terms     = !empty($_POST['terms']);
 
-// 3) Validation
-$errors = [];
-if ($firstname==='') $errors[] = "Prénom obligatoire.";
-if ($lastname==='')  $errors[] = "Nom obligatoire.";
-if ($email==='' || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email invalide.";
-if ($phone==='')    $errors[] = "Téléphone obligatoire.";
-if (strlen($password) < 8) $errors[] = "Mot de passe : 8 caractères minimum.";
-if ($password !== $confirm) $errors[] = "Les mots de passe ne correspondent pas.";
-if (!$terms) $errors[] = "Vous devez accepter les conditions.";
-
-if ($errors) {
-  include __DIR__ . '/includes/header.php';
-  echo '<section class="container"><div class="card" style="margin-top:1.5rem">';
-  echo '<h1>Erreur</h1><ul>'; foreach($errors as $e) echo '<li>'.htmlspecialchars($e).'</li>'; echo '</ul>';
-  echo '<p><a class="btn" href="/register.php">Retour</a></p></div></section>';
-  include __DIR__ . '/includes/footer.php';
-  exit;
+// ---------------------------
+// 2) Validation basique
+// ---------------------------
+if (empty($firstname) || empty($lastname) || empty($email) || empty($password)) {
+    die("❌ Merci de remplir tous les champs obligatoires.");
 }
 
-// 4) Vérification email unique
-$check = $pdo->prepare("SELECT id FROM customers WHERE email = :email LIMIT 1");
-$check->execute([':email' => $email]);
-if ($check->fetch()) {
-  include __DIR__ . '/includes/header.php';
-  echo '<section class="container"><div class="card" style="margin-top:1.5rem">';
-  echo '<h1>Adresse email déjà utilisée</h1>';
-  echo '<p>Veuillez utiliser une autre adresse ou vous connecter si vous avez déjà un compte.</p>';
-  echo '<p><a class="btn" href="/register.php">Retour</a></p></div></section>';
-  include __DIR__ . '/includes/footer.php';
-  exit;
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    die("❌ Email invalide.");
 }
 
-// 5) Hachage + insertion
-$hash = password_hash($password, PASSWORD_DEFAULT);
+// ---------------------------
+// 3) Vérification doublon email
+// ---------------------------
+$stmt = $pdo->prepare("SELECT id FROM clients WHERE email = ?");
+$stmt->execute([$email]);
+$exists = $stmt->fetch();
 
-$stmt = $pdo->prepare("INSERT INTO customers (firstname, lastname, email, phone, password_hash) 
-                       VALUES (:fn, :ln, :em, :ph, :pw)");
-$stmt->execute([
-  ':fn' => $firstname,
-  ':ln' => $lastname,
-  ':em' => $email,
-  ':ph' => $phone,
-  ':pw' => $hash,
-]);
+if ($exists) {
+    die("❌ Cet email est déjà utilisé.");
+}
 
-// (Option) auto-login après inscription
-$_SESSION['customer_id'] = (int)$pdo->lastInsertId();
-$_SESSION['customer_name'] = $firstname;
+// ---------------------------
+// 4) Insertion en BDD
+// ---------------------------
+$hashed_password = password_hash($password, PASSWORD_BCRYPT);
 
-// 6) Confirmation
-include __DIR__ . '/includes/header.php';
-?>
-<section class="container">
-  <div class="card" style="margin-top:1.5rem">
-    <h1 class="mt-0">Compte créé ✅</h1>
-    <p>Bienvenue <?= htmlspecialchars($firstname) ?>, votre compte a bien été créé.</p>
-    <p><a class="btn btn-primary" href="/index.php">Aller à l’accueil</a></p>
-  </div>
-</section>
-<?php include __DIR__ . '/includes/footer.php'; ?>
+$stmt = $pdo->prepare("INSERT INTO clients (firstname, lastname, email, phone, password_hash) VALUES (?, ?, ?, ?, ?)");
+$ok = $stmt->execute([$firstname, $lastname, $email, $phone, $hashed_password]);
+
+if ($ok) {
+    echo "✅ Inscription réussie, vous pouvez maintenant vous connecter.";
+} else {
+    echo "❌ Erreur lors de l’inscription.";
+}

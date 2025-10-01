@@ -33,22 +33,25 @@ $to_lng    = $_POST['to_lng'] ?? null;
 // 2) Validation minimale côté serveur
 // -----------------------------------
 $errors = [];
-if ($from === '' || $to === '')           $errors[] = "Adresses départ et arrivée obligatoires.";
-if ($date === '' || $time === '')         $errors[] = "Date et heure obligatoires.";
-if ($firstname === '' || $lastname === '')$errors[] = "Nom et prénom obligatoires.";
-if ($phone === '')                        $errors[] = "Téléphone obligatoire.";
+if ($from === '' || $to === '')            $errors[] = "Adresses départ et arrivée obligatoires.";
+if ($date === '' || $time === '')          $errors[] = "Date et heure obligatoires.";
+if ($firstname === '' || $lastname === '') $errors[] = "Nom et prénom obligatoires.";
+if ($phone === '')                         $errors[] = "Téléphone obligatoire.";
 if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email invalide.";
-
-$ride_datetime = date('Y-m-d H:i:s', strtotime("$date $time"));
 
 $distance_km  = is_numeric($distance) ? round((float)$distance, 2) : null;
 $duration_min = is_numeric($duration) ? (int)$duration : null;
 $price_eur    = is_numeric($price)    ? round((float)$price, 2) : null;
 
-$start_lat = is_numeric($from_lat) ? (float)$from_lat : null;
-$start_lng = is_numeric($from_lng) ? (float)$from_lng : null;
-$end_lat   = is_numeric($to_lat)   ? (float)$to_lat   : null;
-$end_lng   = is_numeric($to_lng)   ? (float)$to_lng   : null;
+$pickup_lat = is_numeric($from_lat) ? (float)$from_lat : null;
+$pickup_lng = is_numeric($from_lng) ? (float)$from_lng : null;
+$dropoff_lat = is_numeric($to_lat)  ? (float)$to_lat  : null;
+$dropoff_lng = is_numeric($to_lng)  ? (float)$to_lng  : null;
+
+// Construit les champs conformes au schéma: pickup_date + pickup_time
+$pickup_ts   = strtotime("$date $time");
+$pickup_date = date('Y-m-d', $pickup_ts);
+$pickup_time = date('H:i:s', $pickup_ts);
 
 if ($errors) {
   http_response_code(400);
@@ -64,17 +67,30 @@ if ($errors) {
 // ---------------------
 // 3) Insertion en base
 // ---------------------
+// On concatène les estimations dans "notes" pour ne pas nécessiter de colonnes dédiées.
+$notes_db = $notes;
+$meta = [];
+if ($price_eur !== null)   $meta[] = "Prix estimé: ".number_format($price_eur, 2, ',', ' ')." €";
+if ($distance_km !== null) $meta[] = "Distance: ".number_format($distance_km, 2, ',', ' ')." km";
+if ($duration_min !== null)$meta[] = "Durée: ".(int)$duration_min." min";
+if (!empty($option))       $meta[] = "Option: ".$option;
+if ($meta) {
+  $notes_db = trim(($notes_db ? $notes_db."\n" : '').implode(' — ', $meta));
+}
+
 $stmt = $pdo->prepare("
   INSERT INTO reservations
     (firstname, lastname, phone, email,
-     start_address, end_address, start_lat, start_lng, end_lat, end_lng,
-     ride_datetime, distance_km, duration_min, price_eur,
-     option_code, notes, status)
+     start_address, end_address,
+     pickup_date, pickup_time,
+     pickup_lat, pickup_lng, dropoff_lat, dropoff_lng,
+     notes, status)
   VALUES
     (:firstname, :lastname, :phone, :email,
-     :start_address, :end_address, :start_lat, :start_lng, :end_lat, :end_lng,
-     :ride_datetime, :distance_km, :duration_min, :price_eur,
-     :option_code, :notes, 'new')
+     :start_address, :end_address,
+     :pickup_date, :pickup_time,
+     :pickup_lat, :pickup_lng, :dropoff_lat, :dropoff_lng,
+     :notes, 'pending')
 ");
 
 $stmt->execute([
@@ -84,16 +100,13 @@ $stmt->execute([
   ':email'         => $email,
   ':start_address' => $from,
   ':end_address'   => $to,
-  ':start_lat'     => $start_lat,
-  ':start_lng'     => $start_lng,
-  ':end_lat'       => $end_lat,
-  ':end_lng'       => $end_lng,
-  ':ride_datetime' => $ride_datetime,
-  ':distance_km'   => $distance_km,
-  ':duration_min'  => $duration_min,
-  ':price_eur'     => $price_eur,
-  ':option_code'   => $option ?: null,
-  ':notes'         => $notes ?: null,
+  ':pickup_date'   => $pickup_date,
+  ':pickup_time'   => $pickup_time,
+  ':pickup_lat'    => $pickup_lat,
+  ':pickup_lng'    => $pickup_lng,
+  ':dropoff_lat'   => $dropoff_lat,
+  ':dropoff_lng'   => $dropoff_lng,
+  ':notes'         => $notes_db,
 ]);
 
 $id = (int)$pdo->lastInsertId();
@@ -103,14 +116,14 @@ $id = (int)$pdo->lastInsertId();
 // ----------------------------------------------------
 $pdfPath = generate_bon_commande_pdf([
   'id'           => $id,
-  'date'         => date('d/m/Y H:i', strtotime($ride_datetime)),
+  'date'         => date('d/m/Y H:i', $pickup_ts),
   'client_name'  => $firstname.' '.$lastname,
   'client_email' => $email,
   'from'         => $from,
   'to'           => $to,
-  'price'        => $price_eur,
-  'distance_km'  => $distance_km,
-  'duration_min' => $duration_min,
+  'price'        => $price_eur,     // peut être null
+  'distance_km'  => $distance_km,   // peut être null
+  'duration_min' => $duration_min,  // peut être null
   'option'       => $option ?: '—',
 ]);
 
@@ -125,7 +138,7 @@ $bodyClient = "<p>Bonjour ".htmlspecialchars($firstname).",</p>
 <p>Résumé :</p>
 <ul>
   <li><strong>Trajet :</strong> ".htmlspecialchars($from)." → ".htmlspecialchars($to)."</li>
-  <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', strtotime($ride_datetime)))."</li>"
+  <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', $pickup_ts))."</li>"
   . ($price_eur !== null ? "<li><strong>Prix estimé :</strong> ".number_format($price_eur,2,',',' ')." €</li>" : "") .
 "</ul>
 <p>Merci pour votre confiance.<br>— FlexVTC</p>";
@@ -134,7 +147,7 @@ $bodyAdmin = "<p>Nouveau bon de commande en pièce jointe (PDF) pour la réserva
 <ul>
   <li><strong>Client :</strong> ".htmlspecialchars($firstname.' '.$lastname)." (".htmlspecialchars($email).")</li>
   <li><strong>Trajet :</strong> ".htmlspecialchars($from)." → ".htmlspecialchars($to)."</li>
-  <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', strtotime($ride_datetime)))."</li>
+  <li><strong>Date :</strong> ".htmlspecialchars(date('d/m/Y H:i', $pickup_ts))."</li>
 </ul>";
 
 // (envoi via Gmail SMTP - nécessite config/email.php et un mot de passe d'application)
@@ -154,7 +167,7 @@ include __DIR__ . '/includes/header.php';
     <hr>
     <p class="small">
       <strong>Trajet :</strong> <?= htmlspecialchars($from) ?> → <?= htmlspecialchars($to) ?><br>
-      <strong>Quand :</strong> <?= htmlspecialchars(date('d/m/Y H:i', strtotime($ride_datetime))) ?><br>
+      <strong>Quand :</strong> <?= htmlspecialchars(date('d/m/Y H:i', $pickup_ts)) ?><br>
       <?php if($distance_km!==null): ?>Distance : <?= number_format($distance_km, 2, ',', ' ') ?> km — <?php endif; ?>
       <?php if($duration_min!==null): ?>Durée : <?= (int)$duration_min ?> min — <?php endif; ?>
       <?php if($price_eur!==null): ?>Prix estimé : <?= number_format($price_eur, 2, ',', ' ') ?> €<?php endif; ?>

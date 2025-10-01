@@ -1,11 +1,8 @@
 <?php
-// /var/www/html/logout.php
-declare(strict_types=1);
+// logout.php
+require __DIR__ . '/lib/auth.php';
 
-require __DIR__ . '/config/app.php';
-
-if (is_client_logged()) {
-  client_logout();
-  flash_set('success', 'Vous êtes bien déconnecté.');
-}
-redirect('/index.php');
+logout_client();
+set_flash('success', "Vous avez été déconnecté.");
+header('Location: /login.php');
+exit;

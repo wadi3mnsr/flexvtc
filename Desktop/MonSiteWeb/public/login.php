@@ -1,42 +1,54 @@
 <?php
-// /var/www/html/login.php
-declare(strict_types=1);
+// login.php
+require __DIR__ . '/lib/auth.php';
 
-require __DIR__ . '/config/app.php';
-
+// Si déjà connecté, redirige vers le compte
 if (is_client_logged()) {
-  redirect('/index.php');
+    header('Location: /account.php');
+    exit;
 }
 
-$flashes = function_exists('flash_get_all') ? flash_get_all() : [];
-include __DIR__ . '/includes/header.php';
-?>
-<section class="container" style="max-width:520px;">
-  <h1 class="mt-0">Se connecter</h1>
+// CSRF token
+if (empty($_SESSION['csrf_login'])) {
+    $_SESSION['csrf_login'] = bin2hex(random_bytes(32));
+}
+$csrf = $_SESSION['csrf_login'];
 
-  <?php if (!empty($flashes)): ?>
-    <?php foreach ($flashes as $type => $msgs): foreach ($msgs as $msg): ?>
-      <div class="card" style="border-left:4px solid <?= $type==='error' ? '#d33' : ($type==='success' ? '#2d8a34' : '#0070f3') ?>;">
-        <p class="small" style="margin:0; padding-left:1rem;"><?= htmlspecialchars($msg, ENT_QUOTES) ?></p>
-      </div>
-    <?php endforeach; endforeach; ?>
+$flashError = get_flash('error');
+$flashSuccess = get_flash('success');
+?>
+<?php include __DIR__ . '/includes/header.php'; ?>
+
+<main class="container" style="max-width:600px;margin:2rem auto;">
+  <h1>Connexion</h1>
+
+  <?php if ($flashSuccess): ?>
+    <div class="alert alert-success"><?= htmlspecialchars($flashSuccess) ?></div>
   <?php endif; ?>
 
-  <form method="post" action="/login_save.php" class="card">
-    <?= csrf_field() ?>
+  <?php if ($flashError): ?>
+    <div class="alert alert-danger"><?= htmlspecialchars($flashError) ?></div>
+  <?php endif; ?>
 
-    <label>Email
-      <input type="email" name="email" required autocomplete="email">
+  <form method="post" action="/login_save.php" style="display:grid;gap:1rem;">
+    <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+
+    <label>
+      Email
+      <input type="email" name="email" required placeholder="vous@exemple.com">
     </label>
 
-    <label>Mot de passe
-      <input type="password" name="password" required autocomplete="current-password">
+    <label>
+      Mot de passe
+      <input type="password" name="password" required placeholder="••••••••">
     </label>
 
-    <button class="btn btn-primary" type="submit">Connexion</button>
-    <p class="small" style="margin-top:.75rem;">
-      Pas de compte ? <a href="/register.php">Créer un compte</a>
-    </p>
+    <button type="submit" class="btn btn-primary">Se connecter</button>
   </form>
-</section>
+
+  <p style="margin-top:1rem;">
+    Pas encore de compte ? <a href="/register.php">Créer un compte</a>
+  </p>
+</main>
+
 <?php include __DIR__ . '/includes/footer.php'; ?>

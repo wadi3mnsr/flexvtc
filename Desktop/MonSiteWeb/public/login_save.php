@@ -1,50 +1,39 @@
 <?php
-// /var/www/html/login_save.php
-declare(strict_types=1);
-
-require __DIR__ . '/config/app.php';
+// login_save.php
 require __DIR__ . '/config/database.php';
-
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-  redirect('/login.php');
-}
-
-if (!csrf_check()) {
-  flash_set('error', 'Session expirée. Veuillez réessayer.');
-  redirect('/login.php');
-}
+require __DIR__ . '/lib/auth.php';
 
 $email    = trim($_POST['email'] ?? '');
 $password = $_POST['password'] ?? '';
+$csrf     = $_POST['csrf'] ?? '';
 
-$errors = [];
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Email invalide.';
-if ($password === '') $errors[] = 'Mot de passe requis.';
-
-if ($errors) {
-  foreach ($errors as $e) flash_set('error', $e);
-  redirect('/login.php');
+if (empty($csrf) || empty($_SESSION['csrf_login']) || !hash_equals($_SESSION['csrf_login'], $csrf)) {
+    set_flash('error', "Requête invalide (CSRF). Veuillez réessayer.");
+    header('Location: /login.php');
+    exit;
 }
 
-try {
-  $stmt = $pdo->prepare("SELECT id, firstname, lastname, email, password_hash FROM clients WHERE email = :em LIMIT 1");
-  $stmt->execute([':em' => $email]);
-  $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-  if (!$user || !password_verify($password, $user['password_hash'])) {
-    flash_set('error', 'Identifiants incorrects.');
-    redirect('/login.php');
-  }
-
-  session_regenerate_id(true);
-  client_login($user);
-
-  if (function_exists('after_login_redirect_or')) {
-    after_login_redirect_or('/index.php');
-  }
-  redirect('/index.php');
-
-} catch (Throwable $e) {
-  flash_set('error', 'Erreur serveur. Veuillez réessayer.');
-  redirect('/login.php');
+if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
+    set_flash('error', "Email ou mot de passe invalide.");
+    header('Location: /login.php');
+    exit;
 }
+
+// Récupère le client par email
+$stmt = $pdo->prepare("SELECT id, firstname, lastname, email, phone, password_hash, created_at FROM clients WHERE email = ? LIMIT 1");
+$stmt->execute([$email]);
+$client = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$client || !password_verify($password, $client['password_hash'])) {
+    // réponse générique pour ne pas révéler lequel est faux
+    set_flash('error', "Identifiants incorrects.");
+    header('Location: /login.php');
+    exit;
+}
+
+// OK : on connecte
+login_client($client);
+unset($_SESSION['csrf_login']);
+set_flash('success', "Bienvenue, {$client['firstname']} !");
+header('Location: /account.php');
+exit;
