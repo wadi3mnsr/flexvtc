@@ -8,7 +8,7 @@ include __DIR__ . '/includes/header.php';
 ?>
 <main class="container" style="max-width:800px;margin:2rem auto;">
   <h1>Mon compte</h1>
-  <p>Bonjour <strong><?= htmlspecialchars($me['firstname'] . ' ' . $me['lastname']) ?></strong> 👋</p>
+  <p>Bonjour <strong><?= htmlspecialchars($me['firstname'] . ' ' . $me['lastname']) ?></strong> </p>
 
   <ul>
     <li>Email : <?= htmlspecialchars($me['email']) ?></li>

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 // Autoload + connexions (s'appuient sur config/app.php)
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/vendor/autoload.php';
 $pdo     = require __DIR__ . '/config/database.php';
 $dbMongo = require __DIR__ . '/config/mongo.php';
 

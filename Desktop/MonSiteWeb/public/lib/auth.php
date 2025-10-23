@@ -3,16 +3,13 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
-/**
- * Vérifie si un client est connecté
+ /* Vérifie si un client est connecté
  */
 function is_client_logged(): bool {
     return !empty($_SESSION['client']) && !empty($_SESSION['client']['id']);
 }
 
-/**
- * Redirige vers /login.php si non connecté
+ /* Redirige vers /login.php si non connecté
  */
 function require_client_login(): void {
     if (!is_client_logged()) {
@@ -20,16 +17,12 @@ function require_client_login(): void {
         exit;
     }
 }
-
-/**
- * Retourne les infos du client connecté
+/* Retourne les infos du client connecté
  */
 function current_client(): ?array {
     return $_SESSION['client'] ?? null;
 }
-
-/**
- * Connecte un client (stocke ses infos en session)
+ /* Connecte un client (stocke ses infos en session)
  */
 function login_client(array $client): void {
     session_regenerate_id(true);
